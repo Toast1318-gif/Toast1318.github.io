@@ -325,6 +325,16 @@
   .price-list strong{color:var(--text);}
   .price-list ul{margin:6px 0 0; padding-left:18px;}
   .price-list li{margin-bottom:2px;}
+  .price-list li.qty-zero{opacity:.55;}
+  .price-list li.total-row{
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px solid var(--card-border);
+    list-style:none;
+    margin-left:-18px;
+    color:var(--text);
+    font-weight:700;
+  }
 
   .summary-card{
     background:var(--card);
@@ -475,6 +485,11 @@
     </div>
   </div>
 
+  <div class="price-list" id="purchaseSummaryCard">
+    <strong>Items purchased (everyone combined)</strong>
+    <ul id="purchaseSummaryList"></ul>
+  </div>
+
   <div class="price-list">
     <strong>Current pricing</strong>
     <ul>
@@ -485,6 +500,7 @@
       <li>Kona — $9.00 each</li>
       <li>Modelo — $9.00 each</li>
       <li>Soda — $4.00 each</li>
+      <li>Extra Sauce/Celery — $1.00 each</li>
       <li>White HH (wine) — $8.00 each</li>
       <li>White (wine) — $13.00 each</li>
     </ul>
@@ -507,7 +523,8 @@
   ];
 
   var OTHERS = [
-    { key: 'soda', label: 'Soda', price: 4 }
+    { key: 'soda', label: 'Soda', price: 4 },
+    { key: 'extraSauceCelery', label: 'Extra Sauce/Celery', price: 1 }
   ];
 
   var WINES = [
@@ -519,8 +536,16 @@
   // baked into the file rather than stored on the device). Typing part of a
   // saved name into a person's Venmo field will suggest it in a dropdown.
   var VENMO_CONTACTS = [
-    { name: 'Imrran',  venmo: '@ihalari' },
-    { name: 'Matt Cox', venmo: '@matthew-cox-6' }
+    { name: 'Imrran Halari',  venmo: '@ihalari' },
+    { name: 'Matt Cox',       venmo: '@matthew-cox-6' },
+    { name: 'Rachel Horton',  venmo: '@Rachel-Horton-3' },
+    { name: 'Mark Wilson',    venmo: '@mdwilson96' },
+    { name: 'Sunil Shah',     venmo: '@two-nil-92' },
+    { name: 'Amyn Jiwani',    venmo: '@Jiwani' },
+    { name: 'Sami Siddiqui',  venmo: '@Sami-Siddiqui-1' },
+    { name: 'Vijay Ganesh',   venmo: '@Vijay-Ganesh' },
+    { name: 'Brian Ng',       venmo: '@nghokui' },
+    { name: 'Peter Brazill',  venmo: '@Peter-Brazill' }
   ];
 
   var people = [];
@@ -614,6 +639,47 @@
     var total = 0;
     people.forEach(function(p){ total += personTotal(p); });
     return total;
+  }
+
+  // Adds up how many of each item everyone ordered combined, plus the $ total
+  // for that item, for the "Items purchased" summary near the bottom.
+  function computeItemSummary(){
+    var rows = [];
+    var wingsQty = 0;
+    people.forEach(function(p){ wingsQty += (p.wings || 0); });
+    rows.push({ label: 'Wings', qty: wingsQty, price: WING_PRICE, total: wingsQty * WING_PRICE });
+
+    BEERS.forEach(function(b){
+      var qty = 0;
+      people.forEach(function(p){ qty += (p.beers[b.key] || 0); });
+      rows.push({ label: b.label, qty: qty, price: b.price, total: qty * b.price });
+    });
+
+    OTHERS.forEach(function(o){
+      var qty = 0;
+      people.forEach(function(p){ qty += (p.others[o.key] || 0); });
+      rows.push({ label: o.label, qty: qty, price: o.price, total: qty * o.price });
+    });
+
+    WINES.forEach(function(w){
+      var qty = 0;
+      people.forEach(function(p){ qty += (p.wines[w.key] || 0); });
+      rows.push({ label: w.label, qty: qty, price: w.price, total: qty * w.price });
+    });
+
+    return rows;
+  }
+
+  function renderPurchaseSummary(){
+    var listEl = document.getElementById('purchaseSummaryList');
+    if (!listEl) return;
+    var rows = computeItemSummary();
+    var html = rows.map(function(r){
+      var zeroClass = r.qty === 0 ? ' class="qty-zero"' : '';
+      return '<li' + zeroClass + '>' + escapeHtml(r.label) + ' — ' + r.qty + ' × ' + currency(r.price) + ' = ' + currency(r.total) + '</li>';
+    }).join('');
+    html += '<li class="total-row">Total — ' + currency(rawSubtotal()) + '</li>';
+    listEl.innerHTML = html;
   }
 
   // Effective % rate for tax/tip regardless of how it was entered (percent or flat $),
@@ -807,6 +873,7 @@
     document.getElementById('discountAmountDisplay').textContent = '-' + currency(discountAmount());
     document.getElementById('finalTotalDisplay').textContent = currency(finalTotal());
     document.getElementById('grandTotal').textContent = currency(finalTotal());
+    renderPurchaseSummary();
   }
 
   // Refresh one person's tax/tip/owed lines (their own subtotal never changes here).
@@ -838,8 +905,15 @@
   }
 
   document.getElementById('addPersonBtn').addEventListener('click', function(){
-    people.push(newPerson());
+    // Add to the front, not the back, so the new card lands right under this
+    // button instead of at the bottom of a long list.
+    people.unshift(newPerson());
     renderAll();
+    var list = document.getElementById('peopleList');
+    if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Focus the new card's name field so you can start typing immediately.
+    var firstNameInput = document.querySelector('.name-input');
+    if (firstNameInput) firstNameInput.focus();
   });
 
   document.getElementById('clearAllBtn').addEventListener('click', function(){
